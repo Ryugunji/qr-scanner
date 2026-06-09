@@ -6,75 +6,132 @@
   <title>สแกน QR</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #1a1a2e; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
-    h1 { font-size: 1.3em; margin-bottom: 16px; text-align: center; }
-    #status { margin: 8px 0; padding: 10px 16px; border-radius: 8px; background: #333; font-size: 0.95em; text-align: center; width: 100%; max-width: 380px; }
+    body { background: #1a1a2e; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+    h1 { font-size: 1.2em; margin-bottom: 14px; text-align: center; }
+    #status { margin: 6px 0 10px; padding: 10px 14px; border-radius: 8px; background: #333; font-size: 0.9em; text-align: center; width: 100%; max-width: 400px; line-height: 1.5; }
     #status.ok { background: #1a6b1a; }
     #status.err { background: #6b1a1a; }
-    .btn { display: block; width: 100%; max-width: 380px; padding: 14px; border: none; border-radius: 10px; font-size: 1.05em; cursor: pointer; margin-top: 10px; }
-    .btn-primary { background: #f90; color: #000; font-weight: bold; }
-    .btn-secondary { background: #555; color: #fff; }
-    #fileInput { display: none; }
-    #preview { max-width: 380px; width: 100%; border-radius: 10px; margin-top: 12px; display: none; }
+    .btn { display: block; width: 100%; max-width: 400px; padding: 14px; border: none; border-radius: 10px; font-size: 1em; cursor: pointer; margin-top: 8px; font-weight: bold; }
+    .btn-primary { background: #f90; color: #000; }
+    .btn-secondary { background: #555; color: #fff; font-weight: normal; }
+    .btn-info { background: #1a5fa8; color: #fff; }
+    #videoWrap { width: 100%; max-width: 400px; aspect-ratio: 1/1; background: #000; border-radius: 12px; overflow: hidden; position: relative; margin-bottom: 4px; display: none; }
+    #video { width: 100%; height: 100%; object-fit: cover; }
+    .scan-frame { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 60%; height: 60%; border: 3px solid #f90; border-radius: 10px; pointer-events: none; }
+    #canvas { display: none; }
+    #resetHelp { display: none; background: #1a2a3a; border: 1px solid #f90; border-radius: 10px; padding: 14px; max-width: 400px; width: 100%; margin-top: 10px; font-size: 0.88em; line-height: 1.7; }
+    #resetHelp ol { padding-left: 18px; }
   </style>
 </head>
 <body>
   <h1>📷 สแกน QR เบิกของ</h1>
-  <div id="status">กดปุ่มเพื่อเปิดกล้องถ่าย QR Code</div>
-  <input type="file" id="fileInput" accept="image/*" capture="environment">
-  <label for="fileInput" class="btn btn-primary">📷 เปิดกล้องถ่าย QR</label>
-  <img id="preview" alt="preview">
+  <div id="videoWrap">
+    <video id="video" autoplay playsinline muted></video>
+    <div class="scan-frame"></div>
+  </div>
+  <canvas id="canvas"></canvas>
+  <div id="status">กดปุ่มด้านล่างเพื่อเปิดกล้อง</div>
+  <button class="btn btn-primary" id="btnStart" onclick="startCamera()">📷 เปิดกล้องถ่าย QR</button>
+  <button class="btn btn-secondary" id="btnClose" style="display:none" onclick="stopCamera()">✕ ปิดกล้อง</button>
   <button class="btn btn-secondary" onclick="goBack()">← กลับ</button>
+  <div id="resetHelp">
+    <b>⚠️ กล้องถูกบล็อก — วิธีรีเซ็ตสิทธิ์:</b>
+    <ol>
+      <li>กดไอคอน 🔒 หรือ ℹ️ ซ้ายบน URL bar</li>
+      <li>กด "การตั้งค่าไซต์" (Site settings)</li>
+      <li>กด "กล้อง" แล้วเปลี่ยนเป็น "อนุญาต"</li>
+      <li>กลับมาแล้วกด "ลองใหม่" ด้านล่าง</li>
+    </ol>
+    <button class="btn btn-primary" style="margin-top:10px" onclick="retryCamera()">🔄 ลองใหม่</button>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
   <script>
     var retUrl = '';
+    var stream = null;
+    var scanning = false;
+    var scanTimer = null;
     (function() {
-      var params = new URLSearchParams(window.location.search);
-      retUrl = params.get('ret') || '';
+      var p = new URLSearchParams(window.location.search);
+      retUrl = p.get('ret') || '';
     })();
 
-    var fileInput = document.getElementById('fileInput');
+    var video = document.getElementById('video');
+    var canvas = document.getElementById('canvas');
     var status = document.getElementById('status');
-    var preview = document.getElementById('preview');
+    var videoWrap = document.getElementById('videoWrap');
+    var btnStart = document.getElementById('btnStart');
+    var btnClose = document.getElementById('btnClose');
+    var resetHelp = document.getElementById('resetHelp');
 
-    fileInput.addEventListener('change', function() {
-      var file = fileInput.files[0];
-      if (!file) return;
+    function startCamera() {
       status.className = '';
-      status.textContent = 'กำลังอ่าน QR...';
-      var reader = new FileReader();
-      reader.onload = function(e) {
-        var img = new Image();
-        img.onload = function() {
-          preview.src = e.target.result;
-          preview.style.display = 'block';
-          var canvas = document.createElement('canvas');
-          canvas.width = img.width;
-          canvas.height = img.height;
-          var ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0);
-          var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          var code = jsQR(imageData.data, imageData.width, imageData.height);
-          if (code) {
-            status.className = 'ok';
-            status.textContent = 'สแกนได้: ' + code.data;
-            if (retUrl) {
-              var dest = retUrl + (retUrl.indexOf('?') >= 0 ? '&' : '?') + 'qr=' + encodeURIComponent(code.data);
-              setTimeout(function() { window.location.href = dest; }, 800);
-            }
+      status.textContent = 'กำลังเปิดกล้อง...';
+      resetHelp.style.display = 'none';
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+        .then(function(s) {
+          stream = s;
+          video.srcObject = s;
+          videoWrap.style.display = 'block';
+          btnStart.style.display = 'none';
+          btnClose.style.display = 'block';
+          status.textContent = 'ส่อง QR Code ให้อยู่ในกรอบสีส้ม';
+          scanning = true;
+          scanTimer = setInterval(scanFrame, 300);
+        })
+        .catch(function(err) {
+          status.className = 'err';
+          if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+            status.textContent = 'กล้องถูกบล็อก — ดูวิธีรีเซ็ตสิทธิ์ด้านล่าง';
+            resetHelp.style.display = 'block';
+          } else if (err.name === 'NotFoundError') {
+            status.textContent = 'ไม่พบกล้องในอุปกรณ์นี้';
           } else {
-            status.className = 'err';
-            status.textContent = 'ไม่พบ QR Code ในรูป กรุณาถ่ายใหม่';
-            fileInput.value = '';
+            status.textContent = 'เปิดกล้องไม่ได้: ' + err.message;
+            resetHelp.style.display = 'block';
           }
-        };
-        img.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
-    });
+        });
+    }
+
+    function scanFrame() {
+      if (!scanning || video.readyState < 2) return;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0);
+      var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      var code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+      if (code) {
+        scanning = false;
+        clearInterval(scanTimer);
+        stopCamera();
+        status.className = 'ok';
+        status.textContent = 'สแกนได้: ' + code.data;
+        if (retUrl) {
+          var dest = retUrl + (retUrl.indexOf('?') >= 0 ? '&' : '?') + 'qr=' + encodeURIComponent(code.data);
+          setTimeout(function() { window.location.href = dest; }, 1000);
+        }
+      }
+    }
+
+    function stopCamera() {
+      scanning = false;
+      clearInterval(scanTimer);
+      if (stream) { stream.getTracks().forEach(function(t){ t.stop(); }); stream = null; }
+      video.srcObject = null;
+      videoWrap.style.display = 'none';
+      btnStart.style.display = 'block';
+      btnClose.style.display = 'none';
+    }
+
+    function retryCamera() {
+      resetHelp.style.display = 'none';
+      btnStart.style.display = 'block';
+      startCamera();
+    }
 
     function goBack() {
+      stopCamera();
       if (retUrl) { window.location.href = retUrl; }
       else { history.back(); }
     }
