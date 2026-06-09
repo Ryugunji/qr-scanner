@@ -1,65 +1,107 @@
 <!DOCTYPE html>
-  <html lang="th">
+<html lang="th">
   <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>สแกน QR เบิกของ</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>สแกน QR</title>
   <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: #1a1a2e; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; min-height: 100vh; }
-h1 { font-size: 1.3em; margin-bottom: 10px; }
-#status { margin: 8px 0; padding: 8px 16px; border-radius: 8px; background: #333; font-size: 0.9em; text-align: center; }
-#status.ok { background: #1a6b1a; }
-#status.err { background: #6b1a1a; }
-#preview-wrap { width: 100%; max-width: 380px; aspect-ratio: 1/1; background: #000; border-radius: 12px; overflow: hidden; position: relative; margin-bottom: 10px; }
-#video { width: 100%; height: 100%; object-fit: cover; }
-#overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
-.scan-frame { width: 60%; height: 60%; border: 3px solid #f90; border-radius: 8px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.35); }
-#btn-close { background: #555; color: #fff; border: none; padding: 12px 30px; border-radius: 10px; font-size: 1em; cursor: pointer; margin-top: 6px; }
-canvas { display: none; }
-</style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #1a1a2e; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 16px; min-height: 100vh; }
+    h1 { font-size: 1.2em; margin-bottom: 8px; }
+    #status { margin: 8px 0; padding: 8px 14px; border-radius: 8px; background: #333; font-size: 0.9em; text-align: center; width: 100%; max-width: 380px; }
+    #status.ok { background: #1a6b1a; }
+    #status.err { background: #6b1a1a; }
+    #preview-wrap { width: 100%; max-width: 380px; aspect-ratio: 1/1; background: #000; border-radius: 12px; overflow: hidden; position: relative; margin-bottom: 8px; }
+    #video { width: 100%; height: 100%; object-fit: cover; }
+    #overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+    .scan-frame { width: 62%; height: 62%; border: 3px solid #f90; border-radius: 10px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.38); }
+    #btn-close { background: #555; color: #fff; border: none; padding: 11px 28px; border-radius: 10px; font-size: 1em; cursor: pointer; margin-top: 6px; }
+    canvas { display: none; }
+    </style>
   </head>
   <body>
-  <h1>📷 สแกน QR เบิกของ</h1>
-  <div id="status">กำลังเปิดกล้อง...</div>
+    <h1>📷 สแกน QR เบิกของ</h1>
+  <div id="status">กำลังเปิดกล้อง...</div>div>
   <div id="preview-wrap">
-    <video id="video" autoplay playsinline muted></video>
-  <div id="overlay"><div class="scan-frame"></div></div>
-</div>
-<button id="btn-close">X ปิด</button>
-<canvas id="canvas"></canvas>
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+    <video id="video" autoplay playsinline muted></video>video>
+    <div id="overlay"><div class="scan-frame"></div>div></div>div>
+  </div>div>
+  <button id="btn-close" onclick="goBack()">← กลับ</button>button>
+  <canvas id="canvas"></canvas>canvas>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
   <script>
-var video=document.getElementById('video'),canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d'),statusEl=document.getElementById('status'),stream=null,scanLoop=null,done=false;
-document.getElementById('btn-close').addEventListener('click',function(){stopCamera();window.close();});
-function stopCamera(){done=true;if(scanLoop)cancelAnimationFrame(scanLoop);if(stream)stream.getTracks().forEach(function(t){t.stop();});}
-async function startCamera(){
-  try{
-    statusEl.textContent='กำลังขอสิทธิ์กล้อง...';
-    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
-    video.srcObject=stream;await video.play();
-    statusEl.textContent='เล็งกล้องที่ QR Code';statusEl.className='ok';
-      requestAnimationFrame(tick);
-}catch(e){statusEl.textContent='เปิดกล้องไม่ได้: '+e.message;statusEl.className='err';}
-  }
-  function tick(){
-  if(done)return;
-  if(video.readyState===video.HAVE_ENOUGH_DATA){
-      canvas.width=video.videoWidth;canvas.height=video.videoHeight;
-    ctx.drawImage(video,0,0);
-    var id=ctx.getImageData(0,0,canvas.width,canvas.height);
-      var code=jsQR(id.data,id.width,id.height,{inversionAttempts:'dontInvert'});
-    if(code){onQRFound(code.data);return;}
-}
-  scanLoop=requestAnimationFrame(tick);
-}
-function onQRFound(qrText){
-  done=true;if(scanLoop)cancelAnimationFrame(scanLoop);stopCamera();
-  statusEl.textContent='พบ QR แล้ว!';statusEl.className='ok';
-  if(window.opener){window.opener.postMessage({type:'QR_RESULT',qr:qrText},'*');setTimeout(function(){window.close();},600);}
-    else{statusEl.textContent='QR: '+qrText;}
-}
-startCamera();
-</script>
-</body>
+    var params = new URLSearchParams(location.search);
+    var returnUrl = params.get('ret') || '';
+
+    var video = document.getElementById('video');
+    var canvas = document.getElementById('canvas');
+    var ctx = canvas.getContext('2d');
+    var statusEl = document.getElementById('status');
+    var stream = null;
+    var scanLoop = null;
+    var done = false;
+
+    function goBack() {
+        stopCamera();
+        if (returnUrl) {
+              location.href = returnUrl;
+        } else {
+              history.back();
+        }
+    }
+
+    function stopCamera() {
+        done = true;
+        if (scanLoop) cancelAnimationFrame(scanLoop);
+        if (stream) stream.getTracks().forEach(function(t){ t.stop(); });
+    }
+
+    async function startCamera() {
+        try {
+              statusEl.textContent = 'กำลังขอสิทธิ์กล้อง...';
+              stream = await navigator.mediaDevices.getUserMedia({
+                      video: { facingMode: { ideal: 'environment' } },
+                      audio: false
+              });
+              video.srcObject = stream;
+              await video.play();
+              statusEl.textContent = 'เล็งกล้องที่ QR Code';
+              statusEl.className = 'ok';
+              requestAnimationFrame(tick);
+        } catch(e) {
+              statusEl.textContent = 'เปิดกล้องไม่ได้: ' + e.message;
+              statusEl.className = 'err';
+        }
+    }
+
+    function tick() {
+        if (done) return;
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+              canvas.width = video.videoWidth;
+              canvas.height = video.videoHeight;
+              ctx.drawImage(video, 0, 0);
+              var id = ctx.getImageData(0, 0, canvas.width, canvas.height);
+              var code = jsQR(id.data, id.width, id.height, { inversionAttempts: 'dontInvert' });
+              if (code) { onQRFound(code.data); return; }
+        }
+        scanLoop = requestAnimationFrame(tick);
+    }
+
+    function onQRFound(qrText) {
+        done = true;
+        if (scanLoop) cancelAnimationFrame(scanLoop);
+        stopCamera();
+        statusEl.textContent = 'พบ QR แล้ว! กำลังกลับ...';
+        statusEl.className = 'ok';
+        if (returnUrl) {
+              var sep = returnUrl.indexOf('?') >= 0 ? '&' : '?';
+              location.href = returnUrl + sep + 'qr=' + encodeURIComponent(qrText);
+        } else {
+              statusEl.textContent = 'QR: ' + qrText;
+        }
+    }
+
+    startCamera();
+  </script>
+  </body>
 </html>
